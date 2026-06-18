@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
+const ROLE_LABEL_FALLBACK = {
+  ROLE_GUEST: '비회원',
+  ROLE_USER: '일반 회원',
+  ROLE_CREATOR: '크리에이터',
+  ROLE_MODERATOR: '매니저',
+  ROLE_MANAGER: '매니저',
+  ROLE_ADMIN: '관리자',
+};
+
+const ROLE_PRIORITY = ['ROLE_ADMIN', 'ROLE_MODERATOR', 'ROLE_MANAGER', 'ROLE_CREATOR', 'ROLE_USER', 'ROLE_GUEST'];
+
 const navSections = [
   [
     { icon: HomeIcon, label: '홈', to: '/' },
@@ -62,6 +73,35 @@ function useAuthUser() {
   }, []);
 
   return user;
+}
+
+function normalizeRole(role) {
+  if (!role) return null;
+
+  if (typeof role === 'string') {
+    return {
+      roleName: role,
+      description: ROLE_LABEL_FALLBACK[role] || role.replace(/^ROLE_/, ''),
+    };
+  }
+
+  const roleName = role.roleName || role.name || role.authority;
+  if (!roleName) return null;
+
+  return {
+    roleName,
+    description: role.description || ROLE_LABEL_FALLBACK[roleName] || roleName.replace(/^ROLE_/, ''),
+  };
+}
+
+function getPrimaryRole(user) {
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles.map(normalizeRole).filter(Boolean)
+    : [];
+
+  return ROLE_PRIORITY
+    .map((roleName) => normalizedRoles.find((role) => role.roleName === roleName))
+    .find(Boolean) || normalizedRoles[0] || normalizeRole('ROLE_USER');
 }
 
 function MenuIcon() {
@@ -148,10 +188,24 @@ function PenIcon() {
   return <BaseIcon><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10z" /><path d="m13.5 7 3.5 3.5" /></BaseIcon>;
 }
 
+function EditIcon() {
+  return <BaseIcon><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z" /></BaseIcon>;
+}
+
 function Sidebar({ isSidebarOpen, onToggle }) {
   const user = useAuthUser();
   const isLoggedIn = Boolean(user);
   const nickname = useMemo(() => user?.nickname || user?.email || 'Novelv 회원', [user]);
+  const primaryRole = useMemo(() => getPrimaryRole(user), [user]);
+  const roleName = primaryRole?.roleName;
+  const roleDescription = primaryRole?.description;
+
+  const isUserRole = roleName === 'ROLE_USER';
+  const isCreatorRole = roleName === 'ROLE_CREATOR';
+  const isManagerRole = roleName === 'ROLE_MODERATOR' || roleName === 'ROLE_MANAGER';
+  const isAdminRole = roleName === 'ROLE_ADMIN';
+  const showEditIcon = isUserRole || isCreatorRole;
+  const showWallet = isUserRole;
 
   const handleLogout = () => {
     localStorage.removeItem('novelv_access_token');
@@ -188,7 +242,7 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         .sidebar-top { display: none; }
         .sidebar-menu-button { display: inline-grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #d7dbe2; cursor: pointer; }
         .sidebar-menu-button:hover { background: #222; color: #fff; }
-        .sidebar-menu-button svg, .nav-icon svg, .profile-avatar svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+        .sidebar-menu-button svg, .nav-icon svg, .profile-avatar svg, .profile-edit-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
         .sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .sidebar-brand strong { color: #fff; font-size: 22px; font-weight: 900; line-height: 1; white-space: nowrap; }
         .sidebar-age-badge { display: inline-grid; width: 44px; height: 24px; place-items: center; border-radius: 999px; background: #4b5565; color: #fff; font-size: 12px; font-weight: 900; line-height: 1; box-shadow: inset 0 0 0 2px #687386; }
@@ -201,8 +255,10 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         .profile-name-link:focus-visible { outline: 2px solid rgba(255, 43, 122, 0.8); outline-offset: 3px; border-radius: 4px; }
         .profile-name-text { min-width: 0; overflow: hidden; color: #ffffff; font-size: 13px; font-weight: 300; text-overflow: ellipsis; white-space: nowrap; }
         .profile-name-suffix { flex: 0 0 auto; color: #aeb4bf; font-size: 13px; font-weight: 300; white-space: nowrap; }
+        .profile-edit-icon { display: inline-grid; width: 16px; height: 16px; margin-left: 5px; place-items: center; color: #b9bec8; }
+        .profile-edit-icon svg { width: 14px; height: 14px; stroke-width: 2.2; }
         .profile-name-link:hover .profile-name-text { color: #d9dde5; }
-        .profile-name-link:hover .profile-name-suffix { color: #8e95a1; }
+        .profile-name-link:hover .profile-name-suffix, .profile-name-link:hover .profile-edit-icon { color: #8e95a1; }
         .profile-badge, .card-badge { display: inline-grid; align-items: center; justify-content: center; place-items: center; text-align: center; line-height: 1; white-space: nowrap; }
         .profile-badge { height: 20px; min-width: 34px; padding: 0 8px; border-radius: 5px; background: #ff2b7a; color: #fff; font-size: 11px; font-weight: 900; }
         .profile-wallet { display: grid; gap: 7px; margin-top: 12px; }
@@ -211,8 +267,17 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         .wallet-dot.coin { background: #ffd51f; }
         .wallet-dot.bonus { background: #9bb7d7; }
         .wallet-value { margin-left: 2px; color: #fff; font-weight: 950; }
-        .coin-charge { display: grid; width: 100%; height: 38px; margin-top: 10px; padding: 0; place-items: center; border: 0; border-radius: 8px; background: #ff2b7a; color: #fff; font-size: 13px; font-weight: 950; line-height: 1; text-align: center; cursor: pointer; box-sizing: border-box; }
+        .coin-charge, .role-action-button { display: grid; width: 100%; height: 38px; margin-top: 10px; padding: 0; place-items: center; border: 0; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 950; line-height: 1; text-align: center; text-decoration: none; cursor: pointer; box-sizing: border-box; }
+        .coin-charge { background: #ff2b7a; }
         .coin-charge:hover { background: #ff4d91; }
+        .role-action-button { background: #3b3f46; }
+        .role-action-button:hover { background: #4b515c; }
+        .role-action-button.creator { background: #ff2b7a; }
+        .role-action-button.creator:hover { background: #ff4d91; }
+        .role-action-button.manager { background: #52606d; }
+        .role-action-button.manager:hover { background: #657484; }
+        .role-action-button.admin { background: #c33b52; }
+        .role-action-button.admin:hover { background: #d64a62; }
         .side-nav { padding: 8px 10px 10px; overflow: hidden auto; scrollbar-width: none; -ms-overflow-style: none; }
         .side-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
         .side-nav-section { display: grid; gap: 3px; padding: 0 0 12px; margin-bottom: 12px; border-bottom: 1px solid #303030; }
@@ -246,18 +311,27 @@ function Sidebar({ isSidebarOpen, onToggle }) {
                 <Link className="profile-name-link" to="/settings" aria-label="계정 설정으로 이동">
                   <span className="profile-name-text">{nickname}</span>
                   <span className="profile-name-suffix"> 님</span>
+                  {showEditIcon && <span className="profile-edit-icon" aria-hidden="true"><EditIcon /></span>}
                 </Link>
-                <span className="profile-badge">일반</span>
+                {isUserRole && <span className="profile-badge">{roleDescription}</span>}
               </>
             ) : null}
           </div>
+
           {isSidebarOpen ? (
             <>
-              <div className="profile-wallet">
-                <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">0</strong></div>
-                <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">0</strong></div>
-              </div>
-              <button className="coin-charge" type="button">코인 충전하기</button>
+              {showWallet && (
+                <>
+                  <div className="profile-wallet">
+                    <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">{user?.coinBalance ?? 0}</strong></div>
+                    <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">0</strong></div>
+                  </div>
+                  <button className="coin-charge" type="button">코인 충전하기</button>
+                </>
+              )}
+              {isCreatorRole && <Link className="role-action-button creator" to="/creator/upload">동영상 업로드</Link>}
+              {isManagerRole && <Link className="role-action-button manager" to="/manager">매니저 페이지</Link>}
+              {isAdminRole && <Link className="role-action-button admin" to="/admin">관리자 페이지</Link>}
             </>
           ) : null}
         </section>
