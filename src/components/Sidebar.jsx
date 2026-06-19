@@ -198,14 +198,15 @@ function Sidebar({ isSidebarOpen, onToggle }) {
   const nickname = useMemo(() => user?.nickname || user?.email || 'Novelv 회원', [user]);
   const primaryRole = useMemo(() => getPrimaryRole(user), [user]);
   const roleName = primaryRole?.roleName;
-  const roleDescription = primaryRole?.description;
+  const roleDescription = user?.roleDescription || primaryRole?.description || roleName?.replace(/^ROLE_/, '') || '';
+  const coinBalance = user?.coin ?? user?.coinBalance ?? 0;
+  const bonusBalance = user?.bonus ?? user?.bonusBalance ?? 0;
 
   const isUserRole = roleName === 'ROLE_USER';
   const isCreatorRole = roleName === 'ROLE_CREATOR';
   const isManagerRole = roleName === 'ROLE_MODERATOR' || roleName === 'ROLE_MANAGER';
   const isAdminRole = roleName === 'ROLE_ADMIN';
   const showEditIcon = isUserRole || isCreatorRole;
-  const showWallet = isUserRole;
 
   const handleLogout = () => {
     localStorage.removeItem('novelv_access_token');
@@ -254,9 +255,9 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         .profile-name-link:hover { opacity: 0.72; }
         .profile-name-link:focus-visible { outline: 2px solid rgba(255, 43, 122, 0.8); outline-offset: 3px; border-radius: 4px; }
         .profile-name-text { min-width: 0; overflow: hidden; color: #ffffff; font-size: 13px; font-weight: 300; text-overflow: ellipsis; white-space: nowrap; }
-        .profile-name-suffix { flex: 0 0 auto; color: #aeb4bf; font-size: 13px; font-weight: 300; white-space: nowrap; }
-        .profile-edit-icon { display: inline-grid; width: 16px; height: 16px; margin-left: 5px; place-items: center; color: #b9bec8; }
-        .profile-edit-icon svg { width: 14px; height: 14px; stroke-width: 2.2; }
+        .profile-name-suffix { flex: 0 0 auto; color: #aeb4bf; font-size: 13px; font-weight: 300; line-height: 1.2; white-space: nowrap; }
+        .profile-edit-icon { display: inline-grid; width: 1.2em; height: 1.2em; margin-left: 0; place-items: center; color: #b9bec8; font-size: 13px; line-height: 1.2; }
+        .profile-edit-icon svg { width: 100%; height: 100%; stroke-width: 2.2; }
         .profile-name-link:hover .profile-name-text { color: #d9dde5; }
         .profile-name-link:hover .profile-name-suffix, .profile-name-link:hover .profile-edit-icon { color: #8e95a1; }
         .profile-badge, .card-badge { display: inline-grid; align-items: center; justify-content: center; place-items: center; text-align: center; line-height: 1; white-space: nowrap; }
@@ -313,23 +314,18 @@ function Sidebar({ isSidebarOpen, onToggle }) {
                   <span className="profile-name-suffix"> 님</span>
                   {showEditIcon && <span className="profile-edit-icon" aria-hidden="true"><EditIcon /></span>}
                 </Link>
-                {isUserRole && <span className="profile-badge">{roleDescription}</span>}
+                <span className="profile-badge">{roleDescription}</span>
               </>
             ) : null}
           </div>
 
           {isSidebarOpen ? (
             <>
-              {showWallet && (
-                <>
                   <div className="profile-wallet">
-                    <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">{user?.coinBalance ?? 0}</strong></div>
-                    <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">0</strong></div>
+                    <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">{coinBalance}</strong></div>
+                    <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">{bonusBalance}</strong></div>
                   </div>
                   <button className="coin-charge" type="button">코인 충전하기</button>
-                </>
-              )}
-              {isCreatorRole && <Link className="role-action-button creator" to="/creator/upload">동영상 업로드</Link>}
               {isManagerRole && <Link className="role-action-button manager" to="/manager">매니저 페이지</Link>}
               {isAdminRole && <Link className="role-action-button admin" to="/admin">관리자 페이지</Link>}
             </>

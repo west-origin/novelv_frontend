@@ -64,9 +64,26 @@ function UserIcon() {
   );
 }
 
+function UploadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 16V4" />
+      <path d="m6 10 6-6 6 6" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
+
 function Header({ onToggleSidebar }) {
   const user = useAuthUser();
   const isLoggedIn = Boolean(user);
+  const isCreator = user?.roleName === 'ROLE_CREATOR'
+    || user?.role === 'ROLE_CREATOR'
+    || user?.authority === 'ROLE_CREATOR'
+    || user?.roles?.some((role) => {
+      if (typeof role === 'string') return role === 'ROLE_CREATOR';
+      return role?.roleName === 'ROLE_CREATOR' || role?.name === 'ROLE_CREATOR' || role?.authority === 'ROLE_CREATOR';
+    });
 
   return (
     <header className="app-header">
@@ -113,6 +130,7 @@ function Header({ onToggleSidebar }) {
 
         .header-icon-button svg,
         .header-login svg,
+        .header-upload svg,
         .search-button svg {
           width: 20px;
           height: 20px;
@@ -170,8 +188,41 @@ function Header({ onToggleSidebar }) {
 
         .header-right {
           display: flex;
+          align-items: center;
+          gap: 10px;
           justify-content: flex-end;
           min-width: 0;
+        }
+
+        .header-upload {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 36px;
+          padding: 0 16px;
+          border: 1px solid #333438;
+          border-radius: 999px;
+          background: #2a2a2b;
+          color: #eef1f6;
+          font-size: 14px;
+          font-weight: 800;
+          line-height: 1;
+          text-decoration: none;
+          white-space: nowrap;
+          cursor: pointer;
+          transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+        }
+
+        .header-upload:hover {
+          border-color: #46484e;
+          background: #353537;
+          color: #fff;
+          opacity: 0.98;
+        }
+
+        .header-upload:focus-visible {
+          outline: 2px solid rgba(255, 255, 255, 0.42);
+          outline-offset: 3px;
         }
 
         .header-login {
@@ -244,6 +295,12 @@ function Header({ onToggleSidebar }) {
       </form>
 
       <div className="header-right">
+        {isCreator ? (
+          <Link className="header-upload" to="/creator/upload">
+            <UploadIcon />
+            업로드
+          </Link>
+        ) : null}
         {!isLoggedIn ? (
           <Link className="header-login" to="/login">
             <UserIcon />
