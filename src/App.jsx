@@ -10,6 +10,7 @@ import OAuthCallback from './pages/OAuthCallback';
 import WorkDetail from './pages/WorkDetail';
 import AccountSettings from './pages/AccountSettings';
 import CreatorDashboard from './pages/CreatorDashboard';
+import VideoWatchPage from './pages/VideoWatchPage';
 import './App.css';
 
 function AppLayout() {
@@ -86,6 +87,7 @@ function AppLayout() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/oauth/callback/:provider" element={<OAuthCallback />} />
                 <Route path="/works/:workId" element={<WorkDetail />} />
+                <Route path="/videos/:videoId/watch" element={<VideoWatchPage />} />
                 <Route path="/settings" element={<AccountSettings />} />
                 <Route path="/creator/upload" element={<CreatorDashboard />} />
               </Routes>
@@ -109,3 +111,4 @@ function App() {
 }
 
 export default App;
+

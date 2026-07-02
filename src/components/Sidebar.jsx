@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
 const ROLE_LABEL_FALLBACK = {
@@ -22,7 +22,7 @@ const navSections = [
     { icon: GridIcon, label: '장르' },
   ],
   [
-    { icon: PeopleIcon, label: '팔로잉' },
+    { icon: PeopleIcon, label: '팔로우' },
     { icon: BookmarkIcon, label: '내 서재' },
     { icon: CartIcon, label: '장바구니' },
     { icon: ClockIcon, label: '시청기록' },
@@ -192,7 +192,13 @@ function EditIcon() {
   return <BaseIcon><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z" /></BaseIcon>;
 }
 
+function ChevronDownIcon() {
+  return <BaseIcon><path d="m6 9 6 6 6-6" /></BaseIcon>;
+}
+
 function Sidebar({ isSidebarOpen, onToggle }) {
+  const scrollRegionRef = useRef(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const user = useAuthUser();
   const isLoggedIn = Boolean(user);
   const nickname = useMemo(() => user?.nickname || user?.email || 'Novelv 회원', [user]);
@@ -212,6 +218,18 @@ function Sidebar({ isSidebarOpen, onToggle }) {
     localStorage.removeItem('novelv_access_token');
     localStorage.removeItem('novelv_user');
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleScrollRegionMouseMove = (event) => {
+    const bounds = scrollRegionRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+
+    const triggerStart = bounds.bottom - bounds.height / 7;
+    setShowScrollHint(event.clientY >= triggerStart && event.clientY <= bounds.bottom);
+  };
+
+  const hideScrollHint = () => {
+    setShowScrollHint(false);
   };
 
   const renderNavItem = (item) => {
@@ -235,15 +253,16 @@ function Sidebar({ isSidebarOpen, onToggle }) {
   };
 
   return (
-    <aside className={`home-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
+    <aside className={`home-sidebar ${isSidebarOpen ? 'open' : 'closed'}`} onMouseLeave={hideScrollHint}>
       <style>{`
         .home-sidebar { position: sticky; top: 56px; height: calc(100svh - 56px); display: flex; flex-direction: column; border-right: 1px solid #202020; background: #0f0f10; transition: width 180ms ease; overflow: hidden; }
+        .sidebar-scroll-region { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
         .home-sidebar.open { width: 240px; }
         .home-sidebar.closed { width: 64px; }
         .sidebar-top { display: none; }
         .sidebar-menu-button { display: inline-grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #d7dbe2; cursor: pointer; }
         .sidebar-menu-button:hover { background: #222; color: #fff; }
-        .sidebar-menu-button svg, .nav-icon svg, .profile-avatar svg, .profile-edit-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+        .sidebar-menu-button svg, .nav-icon svg, .profile-avatar svg, .profile-edit-icon svg, .sidebar-scroll-hint svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
         .sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .sidebar-brand strong { color: #fff; font-size: 22px; font-weight: 900; line-height: 1; white-space: nowrap; }
         .sidebar-age-badge { display: inline-grid; width: 44px; height: 24px; place-items: center; border-radius: 999px; background: #4b5565; color: #fff; font-size: 12px; font-weight: 900; line-height: 1; box-shadow: inset 0 0 0 2px #687386; }
@@ -288,7 +307,15 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         .side-nav-item:hover, .side-nav-item.active { background: #3a3a3a; color: #fff; }
         .nav-icon { display: inline-grid; width: 20px; min-width: 20px; place-items: center; color: #d9dde5; line-height: 1; }
         .side-nav-item:hover .nav-icon, .side-nav-item.active .nav-icon { color: #fff; }
-        .auth-panel, .logged-in-panel { display: grid; gap: 10px; margin-top: auto; padding: 10px 12px 22px; border-top: 1px solid #303030; }
+        .auth-panel, .logged-in-panel { position: relative; z-index: 2; display: grid; gap: 10px; margin-top: 0; padding: 10px 12px 22px; border-top: 1px solid #303030; background: #0f0f10; }
+        .sidebar-scroll-hint { position: absolute; left: 50%; bottom: 14px; z-index: 1; width: 38px; height: 38px; opacity: 0; pointer-events: none; transform: translate(-50%, 0) scale(0.98); transition: opacity 180ms ease; }
+        .sidebar-scroll-region.scroll-hint-visible .sidebar-scroll-hint { opacity: 1; animation: sidebarHintEnter 220ms cubic-bezier(.2, .8, .2, 1) both; }
+        .home-sidebar.closed .sidebar-scroll-hint { width: 34px; height: 34px; bottom: 12px; }
+        .sidebar-scroll-hint-inner { position: relative; width: 100%; height: 100%; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; background: linear-gradient(180deg, rgba(255, 43, 122, 0.92), rgba(183, 36, 91, 0.92)); color: #fff; box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(255, 255, 255, 0.05) inset; }
+        .sidebar-scroll-region.scroll-hint-visible .sidebar-scroll-hint-inner { animation: sidebarHintBob 1.45s ease-in-out 220ms infinite; }
+        .sidebar-scroll-hint-inner::before { content: ""; position: absolute; inset: -9px; border-radius: inherit; background: rgba(255, 43, 122, 0.14); filter: blur(8px); z-index: -1; }
+        @keyframes sidebarHintEnter { from { transform: translate(-50%, 12px) scale(0.94); } to { transform: translate(-50%, 0) scale(1); } }
+        @keyframes sidebarHintBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
         .login-full, .signup-full, .logout-full { display: inline-grid; height: 42px; place-items: center; border-radius: 8px; font-size: 15px; font-weight: 900; line-height: 1; text-align: center; text-decoration: none; transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease; cursor: pointer; }
         .login-full { border: 1px solid #ff2b7a; background: #ff2b7a; color: #fff; }
         .login-full:hover { border-color: #ff6fa6; background: #ff4d91; opacity: 0.96; }
@@ -298,47 +325,56 @@ function Sidebar({ isSidebarOpen, onToggle }) {
         @media (max-width: 640px) { .home-sidebar { position: fixed; top: 0; bottom: 0; z-index: 50; height: 100svh; box-shadow: 16px 0 38px rgba(0, 0, 0, 0.48); } .home-sidebar.closed { width: 0; } .home-sidebar.open { width: 240px; } .sidebar-top { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; border-bottom: 1px solid #2a2a2a; } }
       `}</style>
 
-      <div className="sidebar-top">
-        <button className="sidebar-menu-button" type="button" onClick={onToggle} aria-label="사이드바 열기/닫기"><MenuIcon /></button>
-        {isSidebarOpen ? <div className="sidebar-brand"><strong>Novelv</strong><span className="sidebar-age-badge">19</span></div> : null}
-      </div>
+      <div
+        ref={scrollRegionRef}
+        className={`sidebar-scroll-region ${showScrollHint ? 'scroll-hint-visible' : ''}`}
+        onMouseMove={handleScrollRegionMouseMove}
+        onMouseLeave={hideScrollHint}
+      >
+        <div className="sidebar-top">
+          <button className="sidebar-menu-button" type="button" onClick={onToggle} aria-label="사이드바 열기/닫기"><MenuIcon /></button>
+          {isSidebarOpen ? <div className="sidebar-brand"><strong>Novelv</strong><span className="sidebar-age-badge">19</span></div> : null}
+        </div>
 
-      {isLoggedIn ? (
-        <section className="sidebar-profile" aria-label="내 프로필">
-          <div className="profile-head">
-            <span className="profile-avatar"><HomeIcon /></span>
+        {isLoggedIn ? (
+          <section className="sidebar-profile" aria-label="내 프로필">
+            <div className="profile-head">
+              <span className="profile-avatar"><HomeIcon /></span>
+              {isSidebarOpen ? (
+                <>
+                  <Link className="profile-name-link" to="/settings" aria-label="계정 설정으로 이동">
+                    <span className="profile-name-text">{nickname}</span>
+                    <span className="profile-name-suffix"> 님</span>
+                    {showEditIcon && <span className="profile-edit-icon" aria-hidden="true"><EditIcon /></span>}
+                  </Link>
+                  <span className="profile-badge">{roleDescription}</span>
+                </>
+              ) : null}
+            </div>
+
             {isSidebarOpen ? (
               <>
-                <Link className="profile-name-link" to="/settings" aria-label="계정 설정으로 이동">
-                  <span className="profile-name-text">{nickname}</span>
-                  <span className="profile-name-suffix"> 님</span>
-                  {showEditIcon && <span className="profile-edit-icon" aria-hidden="true"><EditIcon /></span>}
-                </Link>
-                <span className="profile-badge">{roleDescription}</span>
+                <div className="profile-wallet">
+                  <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">{coinBalance}</strong></div>
+                  <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">{bonusBalance}</strong></div>
+                </div>
+                <button className="coin-charge" type="button">코인 충전하기</button>
+                {isManagerRole && <Link className="role-action-button manager" to="/manager">매니저 페이지</Link>}
+                {isAdminRole && <Link className="role-action-button admin" to="/admin">관리자 페이지</Link>}
               </>
             ) : null}
-          </div>
+          </section>
+        ) : null}
 
-          {isSidebarOpen ? (
-            <>
-                  <div className="profile-wallet">
-                    <div className="wallet-row"><span className="wallet-dot coin" /> 코인 <strong className="wallet-value">{coinBalance}</strong></div>
-                    <div className="wallet-row"><span className="wallet-dot bonus" /> 보너스 <strong className="wallet-value">{bonusBalance}</strong></div>
-                  </div>
-                  <button className="coin-charge" type="button">코인 충전하기</button>
-              {isManagerRole && <Link className="role-action-button manager" to="/manager">매니저 페이지</Link>}
-              {isAdminRole && <Link className="role-action-button admin" to="/admin">관리자 페이지</Link>}
-            </>
-          ) : null}
-        </section>
-      ) : null}
+        <nav className="side-nav" aria-label="주요 메뉴">
+          {navSections.map((section, sectionIndex) => <div className="side-nav-section" key={sectionIndex}>{section.map(renderNavItem)}</div>)}
+        </nav>
 
-      <nav className="side-nav" aria-label="주요 메뉴">
-        {navSections.map((section, sectionIndex) => <div className="side-nav-section" key={sectionIndex}>{section.map(renderNavItem)}</div>)}
-      </nav>
+        <div className="sidebar-scroll-hint" aria-hidden="true"><span className="sidebar-scroll-hint-inner"><ChevronDownIcon /></span></div>
+      </div>
 
-      {isSidebarOpen && !isLoggedIn ? <div className="auth-panel"><Link className="login-full" to="/login">로그인</Link><Link className="signup-full" to="/register">무료 회원가입</Link></div> : null}
-      {isSidebarOpen && isLoggedIn ? <div className="logged-in-panel"><button className="logout-full" type="button" onClick={handleLogout}>로그아웃</button></div> : null}
+      {isSidebarOpen && !isLoggedIn ? <div className="auth-panel" onMouseEnter={hideScrollHint}><Link className="login-full" to="/login">로그인</Link><Link className="signup-full" to="/register">무료 회원가입</Link></div> : null}
+      {isSidebarOpen && isLoggedIn ? <div className="logged-in-panel" onMouseEnter={hideScrollHint}><button className="logout-full" type="button" onClick={handleLogout}>로그아웃</button></div> : null}
     </aside>
   );
 }

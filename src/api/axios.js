@@ -1,7 +1,15 @@
 import axios from 'axios';
 
+function resolveApiBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+
+  return configuredUrl
+    .replace(/^https:\/\/localhost:8080/i, 'http://localhost:8080')
+    .replace(/^https:\/\/127\.0\.0\.1:8080/i, 'http://127.0.0.1:8080');
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
+  baseURL: resolveApiBaseUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -26,6 +34,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('novelv_access_token');
+      localStorage.removeItem('novelv_user');
     }
 
     return Promise.reject(error);

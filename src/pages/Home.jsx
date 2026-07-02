@@ -1,38 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../api/axios';
+
+const R2_BUCKET_URL = import.meta.env.VITE_R2_BUCKET_URL || 'https://novelv.e53ddd024fcaf45c398aa5f81262a740.r2.cloudflarestorage.com';
 
 const slides = [
   {
     id: 1,
-    kicker: '최초! 세계최초! 한국최초!',
-    title: '움직이는 ASMR',
-    subtitle: '피곤한 하루 끝에 만나는 몰입형 오디오 판타지',
+    kicker: 'Featured video',
+    title: 'NOVELV',
+    subtitle: 'Watch the latest creator uploads from Cloudflare R2',
   },
   {
     id: 2,
-    kicker: '오늘 공개된 독점 신작',
-    title: '밤을 걷는 도시',
-    subtitle: '어둠 속에서 깨어나는 새로운 에피소드',
+    kicker: 'New content',
+    title: 'R2 PLAY',
+    subtitle: 'Private R2 videos are connected through short-lived playback URLs',
   },
   {
     id: 3,
-    kicker: '인기 채널 추천',
-    title: '블루 노이즈 클럽',
-    subtitle: '취향을 따라 자동 재생되는 트렌디 시리즈',
+    kicker: 'Creator picks',
+    title: 'WATCH',
+    subtitle: 'Browse uploaded videos from your creators',
   },
 ];
 
-const works = [
-  { id: 1, title: '[독점] 애니메이션 호카 체험 유튜버 라나', channel: '라나', time: '21:18', badge: 'FREE' },
-  { id: 2, title: '[Shorts] 판타지 도이 연구소 - 오크 편', channel: 'Shorts', time: '18:42', badge: 'NEW' },
-  { id: 3, title: '옆집 유부녀의 실체', channel: '19스튜디오', time: '26:26', badge: '시리즈' },
-  { id: 4, title: '[Shorts] 여우 무녀님은 소원의 대가로 나를 원...', channel: 'Shorts', time: '14:09', badge: 'NEW' },
-  { id: 5, title: '[Shorts] 갑자기 찾아온 여사친', channel: 'Shorts', time: '12:55', badge: 'FREE' },
-  { id: 6, title: '새벽 채널의 비밀 라디오', channel: '미드나잇', time: '31:04', badge: 'NEW' },
-  { id: 7, title: '비 내리는 날의 고백', channel: '드라마룸', time: '23:11', badge: 'FREE' },
-  { id: 8, title: '심야 편의점 미스터리', channel: '스릴러랩', time: '19:47', badge: 'TOP' },
-  { id: 9, title: 'AI가 만든 첫 번째 노래', channel: '블루스튜디오', time: '16:20', badge: 'NEW' },
-  { id: 10, title: '달빛 아래에서 다시 만난 우리', channel: '로맨스', time: '28:33', badge: 'FREE' },
-];
+function buildR2VideoUrl(objectKey) {
+  if (!objectKey) return '';
+  return `${R2_BUCKET_URL.replace(/\/$/, '')}/${String(objectKey).replace(/^\//, '')}`;
+}
+
+function normalizeWork(video) {
+  return {
+    id: video.id,
+    title: video.title || 'Untitled video',
+    channel: video.channel || 'R2',
+    time: video.time || '00:00',
+    badge: video.badge || 'NEW',
+    videoUrl: video.videoUrl || buildR2VideoUrl(video.objectKey),
+  };
+}
 
 function Carousel() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -60,7 +67,7 @@ function Carousel() {
       className="hero-carousel"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      aria-label="메인 배너"
+      aria-label="Main banner"
     >
       <div className="slides-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
         {slides.map((slide, index) => (
@@ -74,21 +81,21 @@ function Carousel() {
         ))}
       </div>
 
-      <button className="carousel-arrow left" type="button" onClick={() => goToSlide(activeIndex - 1)} aria-label="이전 배너">
-        ‹
+      <button className="carousel-arrow left" type="button" onClick={() => goToSlide(activeIndex - 1)} aria-label="Previous banner">
+        &lt;
       </button>
-      <button className="carousel-arrow right" type="button" onClick={() => goToSlide(activeIndex + 1)} aria-label="다음 배너">
-        ›
+      <button className="carousel-arrow right" type="button" onClick={() => goToSlide(activeIndex + 1)} aria-label="Next banner">
+        &gt;
       </button>
 
-      <div className="carousel-dots" aria-label="배너 선택">
+      <div className="carousel-dots" aria-label="Banner selector">
         {slides.map((slide, index) => (
           <button
             className={activeIndex === index ? 'active' : ''}
             key={slide.id}
             type="button"
             onClick={() => goToSlide(index)}
-            aria-label={`${index + 1}번째 배너 보기`}
+            aria-label={`Show banner ${index + 1}`}
           />
         ))}
       </div>
@@ -97,8 +104,16 @@ function Carousel() {
 }
 
 function WorkCard({ work }) {
+  const navigate = useNavigate();
+
+  const openVideo = () => {
+    navigate(`/videos/${work.id}/watch`, { state: { work } });
+  };
+
   return (
-    <article className="work-card">
+    <article className="work-card" onClick={openVideo} role="link" tabIndex={0} onKeyDown={(event) => {
+      if (event.key === 'Enter') openVideo();
+    }}>
       <div className="thumb-placeholder">
         <span className={`card-badge ${work.badge === 'NEW' ? 'new' : ''}`}>{work.badge}</span>
         <span className="time-stamp">{work.time}</span>
@@ -110,6 +125,29 @@ function WorkCard({ work }) {
 }
 
 function Home() {
+  const [works, setWorks] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadVideos() {
+      try {
+        const { data } = await api.get('/videos');
+        if (!isMounted) return;
+        setWorks(Array.isArray(data) ? data.map(normalizeWork) : []);
+      } catch {
+        if (!isMounted) return;
+        setWorks([]);
+      }
+    }
+
+    loadVideos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <section className="home-content">
       <style>{`
@@ -405,7 +443,7 @@ function Home() {
       <Carousel />
 
       <div className="section-head">
-        <h2>지금 인기 작품</h2>
+        <h2>인기 작품</h2>
         <button type="button">더보기</button>
       </div>
 
