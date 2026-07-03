@@ -264,22 +264,21 @@ function VideoWatchPage() {
         }
 
         .shorts-video {
-          width: min(38%, 360px);
-          min-width: 260px;
-          max-height: min(650px, 88%);
-          aspect-ratio: 9 / 16;
-          border-radius: 2px;
+          width: 100%;
+          height: 100%;
+          min-height: clamp(420px, 58vw, 720px);
+          border-radius: 0;
           background: #070707;
           object-fit: contain;
         }
 
         .player-state {
           display: grid;
-          width: min(38%, 360px);
-          min-width: 260px;
-          aspect-ratio: 9 / 16;
+          width: 100%;
+          height: 100%;
+          min-height: clamp(420px, 58vw, 720px);
           place-items: center;
-          border-radius: 2px;
+          border-radius: 0;
           background: #070707;
           color: #d7d7d7;
           font-size: 14px;
@@ -744,8 +743,7 @@ function VideoWatchPage() {
 
           .shorts-video,
           .player-state {
-            width: 72%;
-            min-width: 220px;
+            min-height: 420px;
           }
 
           .watch-sidebar {

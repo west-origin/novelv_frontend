@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import Header from '../components/Header';
 import api from '../api/axios';
 
@@ -12,6 +12,11 @@ function formatDuration(seconds) {
   const minutes = Math.floor(rounded / 60);
   const remainSeconds = String(rounded % 60).padStart(2, '0');
   return `${minutes}:${remainSeconds}`;
+}
+
+function resolveApiUrl(path) {
+  const baseUrl = api.defaults.baseURL || 'http://localhost:8080/api';
+  return `${baseUrl.replace(/\/$/, '')}${path}`;
 }
 
 function captureFirstFrame(file) {
@@ -49,6 +54,8 @@ function CreatorDashboard() {
   const thumbnailInputRef = useRef(null);
   const uploadAbortRef = useRef(null);
   const activeVideoIdRef = useRef(null);
+  const isUploadSavedRef = useRef(false);
+  const cancelRequestedVideoIdsRef = useRef(new Set());
   const previewUrlRef = useRef(null);
   const [channel, setChannel] = useState(null);
   const [analytics, setAnalytics] = useState(null);
@@ -58,6 +65,29 @@ function CreatorDashboard() {
   const [modalStep, setModalStep] = useState('select');
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [isCancellingUpload, setIsCancellingUpload] = useState(false);
+  const [isSavingUpload, setIsSavingUpload] = useState(false);
+
+  const cancelTemporaryUpload = (videoId, { keepalive = false } = {}) => {
+    if (!videoId || isUploadSavedRef.current || cancelRequestedVideoIdsRef.current.has(videoId)) {
+      return Promise.resolve();
+    }
+
+    cancelRequestedVideoIdsRef.current.add(videoId);
+
+    if (keepalive) {
+      const token = localStorage.getItem('novelv_access_token');
+      return fetch(resolveApiUrl(`/creator/videos/${videoId}/cancel`), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        keepalive: true,
+      }).catch(() => undefined);
+    }
+
+    return api.post(`/creator/videos/${videoId}/cancel`, {}).catch((error) => {
+      cancelRequestedVideoIdsRef.current.delete(videoId);
+      throw error;
+    });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +119,10 @@ function CreatorDashboard() {
 
     return () => {
       isMounted = false;
+      const videoId = activeVideoIdRef.current;
+      if (videoId && !isUploadSavedRef.current) {
+        cancelTemporaryUpload(videoId, { keepalive: true });
+      }
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
       }
@@ -96,16 +130,43 @@ function CreatorDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const videoId = activeVideoIdRef.current;
+      if (videoId && !isUploadSavedRef.current) {
+        cancelTemporaryUpload(videoId, { keepalive: true });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    if (!isUploadModalOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeUploadModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isUploadModalOpen, isCancellingUpload, isSavingUpload]);
+
   const resetUploadModalState = () => {
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
     }
     activeVideoIdRef.current = null;
+    isUploadSavedRef.current = false;
     uploadAbortRef.current = null;
     setSelectedVideo(null);
     setModalStep('select');
     setIsDraggingUpload(false);
+    setIsSavingUpload(false);
     setUploadState({ status: 'idle', message: '' });
   };
 
@@ -115,12 +176,12 @@ function CreatorDashboard() {
   };
 
   const closeUploadModal = async () => {
-    if (isCancellingUpload) return;
+    if (isCancellingUpload || isSavingUpload) return;
 
     const videoId = activeVideoIdRef.current;
     uploadAbortRef.current?.abort();
 
-    if (!videoId) {
+    if (!videoId || isUploadSavedRef.current) {
       setIsUploadModalOpen(false);
       resetUploadModalState();
       return;
@@ -130,7 +191,7 @@ function CreatorDashboard() {
     setUploadState({ status: 'uploading', message: '업로드를 취소하고 R2 파일을 삭제하는 중입니다...' });
 
     try {
-      await api.post(`/creator/videos/${videoId}/cancel`, {});
+      await cancelTemporaryUpload(videoId);
     } catch (error) {
       setUploadState({
         status: 'error',
@@ -146,7 +207,7 @@ function CreatorDashboard() {
   };
 
   const openFilePicker = () => {
-    if (uploadState.status === 'uploading' || isCancellingUpload) return;
+    if (uploadState.status === 'uploading' || isCancellingUpload || isSavingUpload) return;
     fileInputRef.current?.click();
   };
 
@@ -210,25 +271,46 @@ function CreatorDashboard() {
         throw new Error(`R2 업로드 실패 (${uploadResponse.status})`);
       }
 
-      await api.post(`/creator/videos/${data.videoId}/complete`, {
-        durationSeconds: Math.floor(metadata.durationSeconds || 0),
-      }, { signal: abortController.signal });
-
       setUploadState({
         status: 'done',
-        message: `업로드가 완료되었습니다. 영상 ID: ${data.videoId}`,
+        message: `업로드가 완료되었습니다. 저장을 눌러 최종 등록하세요. 동영상 ID: ${data.videoId}`,
       });
       uploadAbortRef.current = null;
     } catch (error) {
       if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
-        setUploadState({ status: 'idle', message: '업로드가 취소되었습니다.' });
+        setUploadState({ status: 'idle', message: '?낅줈?쒓? 痍⑥냼?섏뿀?듬땲??' });
         return;
       }
 
       setUploadState({
         status: 'error',
-        message: error?.response?.data?.message || error?.message || '업로드 중 오류가 발생했습니다.',
+        message: error?.response?.data?.message || error?.message || '?낅줈??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.',
       });
+    }
+  };
+
+  const saveUpload = async () => {
+    const videoId = activeVideoIdRef.current;
+    if (!videoId || uploadState.status !== 'done' || isSavingUpload || isCancellingUpload) return;
+
+    setIsSavingUpload(true);
+    setUploadState({ status: 'saving', message: '동영상을 최종 저장하는 중입니다...' });
+
+    try {
+      await api.post(`/creator/videos/${videoId}/complete`, {
+        title: selectedVideo?.title?.trim(),
+        durationSeconds: selectedVideo?.durationSeconds ?? null,
+      });
+      isUploadSavedRef.current = true;
+      activeVideoIdRef.current = null;
+      setIsUploadModalOpen(false);
+      resetUploadModalState();
+    } catch (error) {
+      setUploadState({
+        status: 'error',
+        message: error?.response?.data?.message || error?.message || '동영상 저장 중 오류가 발생했습니다.',
+      });
+      setIsSavingUpload(false);
     }
   };
 
@@ -265,7 +347,7 @@ function CreatorDashboard() {
   const handleUploadDrop = async (event) => {
     event.preventDefault();
     setIsDraggingUpload(false);
-    if (uploadState.status === 'uploading') return;
+    if (uploadState.status === 'uploading' || isSavingUpload || isCancellingUpload) return;
     const file = event.dataTransfer.files?.[0];
     await uploadFile(file);
   };
@@ -640,65 +722,6 @@ function CreatorDashboard() {
           padding: 24px 48px 34px;
         }
 
-        .upload-progress-steps {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          align-items: center;
-          margin: -10px -12px 32px;
-          color: #8b8b8b;
-          font-size: 13px;
-          font-weight: 950;
-          text-align: center;
-        }
-
-        .upload-progress-step {
-          position: relative;
-          display: grid;
-          justify-items: center;
-          gap: 8px;
-        }
-
-        .upload-progress-step::before {
-          content: "";
-          position: absolute;
-          top: 29px;
-          left: -50%;
-          width: 100%;
-          height: 2px;
-          background: #565656;
-        }
-
-        .upload-progress-step:first-child::before {
-          display: none;
-        }
-
-        .upload-progress-step.active,
-        .upload-progress-step.done {
-          color: #fff;
-        }
-
-        .upload-progress-dot {
-          position: relative;
-          z-index: 1;
-          width: 18px;
-          height: 18px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          border: 4px solid #242424;
-          background: #777;
-          box-shadow: 0 0 0 2px #777;
-          color: #111;
-          font-size: 11px;
-          line-height: 1;
-        }
-
-        .upload-progress-step.active .upload-progress-dot,
-        .upload-progress-step.done .upload-progress-dot {
-          background: #fff;
-          box-shadow: 0 0 0 2px #fff;
-        }
-
         .upload-details-grid {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 304px;
@@ -941,17 +964,13 @@ function CreatorDashboard() {
           .upload-details-title {
             font-size: 28px;
           }
-
-          .upload-progress-steps {
-            font-size: 11px;
-          }
         }
       `}</style>
 
       <Header onToggleSidebar={() => {}} />
 
       <div className="creator-dashboard-shell">
-        <aside className="creator-sidebar" aria-label="크리에이터 메뉴">
+        <aside className="creator-sidebar" aria-label="?щ━?먯씠??硫붾돱">
           <div className="creator-channel">
             {channel?.profileImageUrl ? (
               <img className="creator-avatar" src={channel.profileImageUrl} alt="" />
@@ -960,7 +979,7 @@ function CreatorDashboard() {
                 {(channel?.name || 'N').slice(0, 1).toUpperCase()}
               </div>
             )}
-            <strong>{channel?.name || '내 채널'}</strong>
+            <strong>{channel?.name || '??梨꾨꼸'}</strong>
             <span>{channel?.handle || '@creator'}</span>
           </div>
 
@@ -976,16 +995,16 @@ function CreatorDashboard() {
           <h1>채널 대시보드</h1>
 
           <div className="creator-dashboard-grid">
-            <section className="creator-card upload-card" aria-label="영상 업로드">
+            <section className="creator-card upload-card" aria-label="동영상 업로드">
               <div className="upload-dropzone">
                 <div className="upload-center">
-                  <div className="upload-icon" aria-hidden="true">↑</div>
+                  <div className="upload-icon" aria-hidden="true">+</div>
                   <p className="upload-copy">
-                    영상 파일을 선택하면 서버가 Cloudflare R2 presigned URL을 발급하고,
+                    동영상 파일을 선택하면 서버가 Cloudflare R2 presigned URL을 발급하고,
                     브라우저가 R2 private 버킷에 직접 업로드합니다.
                   </p>
                   <button className="video-upload-button" type="button" onClick={openUploadModal}>
-                    영상 업로드
+                    동영상 업로드
                   </button>
                   <p className={`upload-status ${uploadState.status}`}>
                     {uploadState.message}
@@ -994,8 +1013,8 @@ function CreatorDashboard() {
               </div>
             </section>
 
-            <section className="creator-card analytics-card" aria-label="채널 분석">
-              <h2>채널 분석</h2>
+            <section className="creator-card analytics-card" aria-label="梨꾨꼸 遺꾩꽍">
+              <h2>梨꾨꼸 遺꾩꽍</h2>
               <div className="metric-row">
                 <span>구독자</span>
                 <span className="metric-value">{formatNumber(analytics?.subscriberCount)}</span>
@@ -1005,7 +1024,7 @@ function CreatorDashboard() {
                 <span className="metric-value">{formatNumber(analytics?.views28Days)}</span>
               </div>
               <div className="metric-row">
-                <span>최근 28일 시청 시간</span>
+                <span>理쒓렐 28???쒖껌 ?쒓컙</span>
                 <span className="metric-value">{formatNumber(analytics?.watchTime28Days)}</span>
               </div>
             </section>
@@ -1014,7 +1033,15 @@ function CreatorDashboard() {
       </div>
 
       {isUploadModalOpen && (
-        <div className="upload-modal-overlay" role="presentation">
+        <div
+          className="upload-modal-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeUploadModal();
+            }
+          }}
+        >
           <section
             className="upload-modal"
             role="dialog"
@@ -1029,7 +1056,7 @@ function CreatorDashboard() {
                   type="button"
                   aria-label="닫기"
                   onClick={closeUploadModal}
-                  disabled={isCancellingUpload}
+                  disabled={isCancellingUpload || isSavingUpload}
                 >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -1062,31 +1089,12 @@ function CreatorDashboard() {
                 </div>
               ) : (
                 <div className="upload-details">
-                  <div className="upload-progress-steps" aria-label="업로드 단계">
-                    <div className="upload-progress-step active">
-                      <span>세부정보</span>
-                      <span className="upload-progress-dot" />
-                    </div>
-                    <div className="upload-progress-step">
-                      <span>동영상 요소</span>
-                      <span className="upload-progress-dot" />
-                    </div>
-                    <div className="upload-progress-step done">
-                      <span>검토</span>
-                      <span className="upload-progress-dot">✓</span>
-                    </div>
-                    <div className="upload-progress-step">
-                      <span>공개 상태</span>
-                      <span className="upload-progress-dot" />
-                    </div>
-                  </div>
-
                   <div className="upload-details-grid">
                     <div>
-                      <h3 className="upload-details-title">세부정보</h3>
+                      <h3 className="upload-details-title">기본 정보</h3>
                       <div className="upload-form-group">
                         <div className="upload-field">
-                          <label htmlFor="upload-title">제목(필수 항목)</label>
+                          <label htmlFor="upload-title">제목</label>
                           <input
                             id="upload-title"
                             type="text"
@@ -1104,7 +1112,7 @@ function CreatorDashboard() {
                             id="upload-description"
                             value={selectedVideo?.description || ''}
                             maxLength={5000}
-                            placeholder="시청자에게 동영상에 대해 설명해 주세요"
+                            placeholder="시청자에게 동영상에 대한 설명을 입력하세요."
                             onChange={(event) => updateSelectedVideo('description', event.target.value)}
                           />
                           <span className="upload-count">{selectedVideo?.description?.length || 0}/5000</span>
@@ -1113,13 +1121,13 @@ function CreatorDashboard() {
 
                       <section aria-label="썸네일">
                         <h4 className="upload-section-title">썸네일</h4>
-                        <p className="upload-section-copy">눈에 띄고 시청자의 관심을 끄는 썸네일을 설정하세요.</p>
+                        <p className="upload-section-copy">시청자의 관심을 끄는 썸네일을 설정하세요.</p>
                         <div className="thumbnail-options">
                           <button className="thumbnail-option" type="button" onClick={openThumbnailPicker}>
                             파일 업로드
                           </button>
-                          <div className="thumbnail-option" aria-label="자동 생성된 썸네일">
-                            {selectedVideo?.thumbnailUrl ? <img src={selectedVideo.thumbnailUrl} alt="자동 생성된 썸네일" /> : '자동 생성됨'}
+                          <div className="thumbnail-option" aria-label="자동 생성 썸네일">
+                            {selectedVideo?.thumbnailUrl ? <img src={selectedVideo.thumbnailUrl} alt="자동 생성 썸네일" /> : '자동 생성'}
                           </div>
                         </div>
                       </section>
@@ -1151,12 +1159,17 @@ function CreatorDashboard() {
 
             <footer className="upload-modal-footer">
               <div className="upload-footer-left">
-                <span className="upload-footer-icon" aria-hidden="true">↥</span>
+                <span className="upload-footer-icon" aria-hidden="true">✓</span>
                 <span className="upload-footer-icon" aria-hidden="true">HD</span>
                 <p className={`upload-modal-status ${uploadState.status}`}>{uploadState.message || '파일을 선택해 업로드를 시작하세요.'}</p>
               </div>
-              <button className="upload-next-button" type="button" disabled={uploadState.status === 'uploading' || isCancellingUpload}>
-                다음
+              <button
+                className="upload-next-button"
+                type="button"
+                onClick={saveUpload}
+                disabled={uploadState.status !== 'done' || isCancellingUpload || isSavingUpload}
+              >
+                {isSavingUpload ? '저장 중...' : '저장'}
               </button>
             </footer>
 
