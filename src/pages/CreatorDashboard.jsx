@@ -212,6 +212,7 @@ function CreatorDashboard() {
   };
 
   const openThumbnailPicker = () => {
+    if (uploadState.status === 'uploading' || isCancellingUpload || isSavingUpload) return;
     thumbnailInputRef.current?.click();
   };
 
@@ -236,6 +237,8 @@ function CreatorDashboard() {
       description: '',
       previewUrl: metadata.previewUrl,
       thumbnailUrl: metadata.thumbnailUrl,
+      thumbnailObjectKey: '',
+      thumbnailContentType: '',
       durationSeconds: Math.floor(metadata.durationSeconds || 0),
       durationLabel: formatDuration(metadata.durationSeconds),
       videoId: null,
@@ -300,6 +303,8 @@ function CreatorDashboard() {
       await api.post(`/creator/videos/${videoId}/complete`, {
         title: selectedVideo?.title?.trim(),
         durationSeconds: selectedVideo?.durationSeconds ?? null,
+        thumbnailObjectKey: selectedVideo?.thumbnailObjectKey || null,
+        thumbnailContentType: selectedVideo?.thumbnailContentType || null,
       });
       isUploadSavedRef.current = true;
       activeVideoIdRef.current = null;
@@ -320,16 +325,53 @@ function CreatorDashboard() {
     event.target.value = '';
   };
 
-  const handleThumbnailUpload = (event) => {
+  const handleThumbnailUpload = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSelectedVideo((current) => current ? { ...current, thumbnailUrl: String(reader.result || '') } : current);
-    };
-    reader.readAsDataURL(file);
+    const videoId = activeVideoIdRef.current;
     event.target.value = '';
+    if (!file) return;
+    if (!videoId) {
+      setUploadState({ status: 'error', message: '동영상 업로드가 완료된 뒤 썸네일을 등록할 수 있습니다.' });
+      return;
+    }
+
+    const contentType = file.type || 'image/webp';
+    const previewUrl = URL.createObjectURL(file);
+    setUploadState({ status: 'uploading', message: '썸네일 업로드 URL을 발급하는 중입니다...' });
+
+    try {
+      const { data } = await api.post(`/creator/videos/${videoId}/thumbnail-upload`, {
+        fileName: file.name,
+        contentType,
+        fileSizeBytes: file.size,
+      });
+
+      const uploadResponse = await fetch(data.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': contentType,
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`썸네일 R2 업로드 실패 (${uploadResponse.status})`);
+      }
+
+      setSelectedVideo((current) => current ? {
+        ...current,
+        thumbnailUrl: previewUrl,
+        thumbnailObjectKey: data.objectKey,
+        thumbnailContentType: contentType,
+      } : current);
+      setUploadState({ status: 'done', message: '썸네일 업로드가 완료되었습니다. 저장을 눌러 최종 등록하세요.' });
+    } catch (error) {
+      URL.revokeObjectURL(previewUrl);
+      setUploadState({
+        status: 'error',
+        message: error?.response?.data?.message || error?.message || '썸네일 업로드 중 오류가 발생했습니다.',
+      });
+    }
   };
 
   const handleUploadDragOver = (event) => {

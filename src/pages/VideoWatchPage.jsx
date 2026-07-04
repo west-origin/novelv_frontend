@@ -18,6 +18,7 @@ function normalizeVideo(video) {
     badge: video.badge || '무료',
     description: video.description || '짧은 영상으로 만나는 NovelV 작품의 주요 장면과 분위기를 감상해 보세요.',
     videoUrl: video.videoUrl || buildR2VideoUrl(video.objectKey),
+    thumbnailUrl: video.thumbnailUrl || '',
   };
 }
 
@@ -37,7 +38,11 @@ function EpisodeItem({ episode, isActive, onSelect }) {
       onClick={() => onSelect(episode)}
     >
       <div className="episode-thumb">
-        <span className="episode-thumb__mark">{episode.title.charAt(0).toUpperCase()}</span>
+        {episode.thumbnailUrl ? (
+          <img className="episode-thumb__image" src={episode.thumbnailUrl} alt="" />
+        ) : (
+          <span className="episode-thumb__mark">{episode.title.charAt(0).toUpperCase()}</span>
+        )}
         <span className="episode-thumb__overlay">{isActive ? 'Ⅱ' : '▶'}</span>
       </div>
       <div className="episode-copy">
@@ -674,6 +679,14 @@ function VideoWatchPage() {
           color: rgba(255, 255, 255, 0.42);
           font-size: 30px;
           font-weight: 950;
+        }
+
+        .episode-thumb__image {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
         .episode-thumb__overlay {

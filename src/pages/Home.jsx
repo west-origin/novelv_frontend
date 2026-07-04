@@ -38,6 +38,7 @@ function normalizeWork(video) {
     time: video.time || '00:00',
     badge: video.badge || 'NEW',
     videoUrl: video.videoUrl || buildR2VideoUrl(video.objectKey),
+    thumbnailUrl: video.thumbnailUrl || '',
   };
 }
 
@@ -115,6 +116,7 @@ function WorkCard({ work }) {
       if (event.key === 'Enter') openVideo();
     }}>
       <div className="thumb-placeholder">
+        {work.thumbnailUrl ? <img className="thumb-image" src={work.thumbnailUrl} alt="" /> : null}
         <span className={`card-badge ${work.badge === 'NEW' ? 'new' : ''}`}>{work.badge}</span>
         <span className="time-stamp">{work.time}</span>
       </div>
@@ -346,6 +348,14 @@ function Home() {
             linear-gradient(145deg, rgba(255, 255, 255, 0.14), transparent 42%),
             linear-gradient(135deg, #8c8c8c 0%, #6f6f6f 45%, #aaa 100%);
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+
+        .thumb-image {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
         .card-badge {
