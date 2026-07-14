@@ -1026,10 +1026,9 @@ function CreatorDashboard() {
           </div>
 
           <nav className="creator-nav">
-            <button className="creator-nav-item active" type="button">Dashboard</button>
-            <button className="creator-nav-item" type="button">Content</button>
-            <button className="creator-nav-item" type="button">Analytics</button>
-            <button className="creator-nav-item" type="button">Settings</button>
+            <button className="creator-nav-item active" type="button">대시보드</button>
+            <button className="creator-nav-item" type="button">콘텐츠</button>
+            <button className="creator-nav-item" type="button">분석</button>
           </nav>
         </aside>
 
@@ -1040,10 +1039,9 @@ function CreatorDashboard() {
             <section className="creator-card upload-card" aria-label="동영상 업로드">
               <div className="upload-dropzone">
                 <div className="upload-center">
-                  <div className="upload-icon" aria-hidden="true">+</div>
+                  <div className="upload-icon" aria-hidden="true"><svg width="70" height="70" viewBox="0 0 72 72" fill="none"><path d="M36 14 19 33h10v17h14V33h10L36 14Z" fill="currentColor"></path><path d="M22 58h28" stroke="currentColor" stroke-width="6" stroke-linecap="square"></path></svg></div>
                   <p className="upload-copy">
-                    동영상 파일을 선택하면 서버가 Cloudflare R2 presigned URL을 발급하고,
-                    브라우저가 R2 private 버킷에 직접 업로드합니다.
+                    시작하려면 동영상을 업로드하고 게시하세요.
                   </p>
                   <button className="video-upload-button" type="button" onClick={openUploadModal}>
                     동영상 업로드
@@ -1055,8 +1053,8 @@ function CreatorDashboard() {
               </div>
             </section>
 
-            <section className="creator-card analytics-card" aria-label="梨꾨꼸 遺꾩꽍">
-              <h2>梨꾨꼸 遺꾩꽍</h2>
+            <section className="creator-card analytics-card" aria-label="채널 분석">
+              <h2>채널 분석</h2>
               <div className="metric-row">
                 <span>구독자</span>
                 <span className="metric-value">{formatNumber(analytics?.subscriberCount)}</span>
@@ -1066,7 +1064,7 @@ function CreatorDashboard() {
                 <span className="metric-value">{formatNumber(analytics?.views28Days)}</span>
               </div>
               <div className="metric-row">
-                <span>理쒓렐 28???쒖껌 ?쒓컙</span>
+                <span>28일간조회 분석</span>
                 <span className="metric-value">{formatNumber(analytics?.watchTime28Days)}</span>
               </div>
             </section>

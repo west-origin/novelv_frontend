@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { oauthProviders, startOAuthLogin } from '../auth/oauth';
 
 function Login() {
   return (
@@ -194,10 +195,19 @@ function Login() {
 
         <p className="simple-login">간편 로그인</p>
 
-        <div className="social-row" aria-label="간편 로그인">
-          <button className="social-button kakao" type="button" aria-label="카카오로 로그인">●</button>
-          <button className="social-button google" type="button" aria-label="구글로 로그인">G</button>
-          <button className="social-button naver" type="button" aria-label="네이버로 로그인">N</button>
+        <div className="social-row" aria-label="social login">
+          {oauthProviders.map((provider) => (
+            <button
+              key={provider.id}
+              className={`social-button ${provider.className}`}
+              type="button"
+              aria-label={`${provider.label} login`}
+              title={`${provider.label} login`}
+              onClick={() => startOAuthLogin(provider)}
+            >
+              {provider.shortLabel}
+            </button>
+          ))}
         </div>
       </div>
     </section>

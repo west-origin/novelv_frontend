@@ -1,66 +1,9 @@
 import { Link } from 'react-router-dom';
-
-const oauthConfig = {
-  kakao: {
-    label: '카카오로 가입',
-    shortLabel: 'K',
-    className: 'kakao',
-    authBaseUrl: 'https://kauth.kakao.com/oauth/authorize',
-    clientId: import.meta.env.VITE_KAKAO_CLIENT_ID,
-    scope: '',
-  },
-  google: {
-    label: '구글로 가입',
-    shortLabel: 'G',
-    className: 'google',
-    authBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-    scope: 'email profile',
-  },
-  naver: {
-    label: '네이버로 가입',
-    shortLabel: 'N',
-    className: 'naver',
-    authBaseUrl: 'https://nid.naver.com/oauth2.0/authorize',
-    clientId: import.meta.env.VITE_NAVER_CLIENT_ID,
-    scope: '',
-    state: import.meta.env.VITE_NAVER_STATE || 'novelv-local',
-  },
-};
-
-const oauthProviders = Object.entries(oauthConfig).map(([id, config]) => ({ id, ...config }));
-
-function buildOAuthUrl(provider) {
-  const redirectUri = `${window.location.origin}/oauth/callback/${provider.id}`;
-  const params = new URLSearchParams({
-    client_id: provider.clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-  });
-
-  if (provider.scope) {
-    params.set('scope', provider.scope);
-  }
-
-  if (provider.state) {
-    params.set('state', provider.state);
-  }
-
-  return `${provider.authBaseUrl}?${params.toString()}`;
-}
-
-function isMissingClientId(clientId) {
-  return !clientId || clientId.startsWith('YOUR_') || clientId.startsWith('your-');
-}
+import { oauthProviders, startOAuthLogin } from '../auth/oauth';
 
 function Register() {
   const handleSocialLogin = (provider) => {
-    if (isMissingClientId(provider.clientId)) {
-      alert(`${provider.label} 클라이언트 ID가 설정되지 않았습니다. D:\\work_space\\novelv-frontend\\.env 파일을 확인해 주세요.`);
-      return;
-    }
-
-    window.location.assign(buildOAuthUrl(provider));
+    startOAuthLogin(provider);
   };
 
   return (
